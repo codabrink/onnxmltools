@@ -1,14 +1,11 @@
-# -------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See License.txt in the project root for
-# license information.
-# --------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 
 from ..common._container import LightGbmModelContainer
 from ..common._topology import Topology
 from ..common.data_types import (FloatTensorType,
-    SequenceType, DictionaryType, StringType, Int64Type)
+                                 SequenceType, DictionaryType, StringType, Int64Type)
 
 from lightgbm import LGBMClassifier, LGBMRegressor
 
@@ -18,6 +15,7 @@ lightgbm_classifier_list = [LGBMClassifier]
 # are equivalent in terms of conversion.
 lightgbm_operator_name_map = {LGBMClassifier: 'LgbmClassifier',
                               LGBMRegressor: 'LgbmRegressor'}
+
 
 class WrappedBooster:
 
@@ -44,7 +42,7 @@ class WrappedBooster:
     def _generate_classes(self, model_dict):
         if model_dict['num_class'] == 1:
             return numpy.asarray([0, 1])
-        return numpy.arange(model_dict['num_class'])        
+        return numpy.arange(model_dict['num_class'])
 
 
 def _get_lightgbm_operator_name(model):
@@ -89,11 +87,13 @@ def _parse_lightgbm_simple_model(scope, model, inputs):
     return this_operator.outputs
 
 
-def _parse_sklearn_classifier(scope, model, inputs):
+def _parse_sklearn_classifier(scope, model, inputs, zipmap=True):
     probability_tensor = _parse_lightgbm_simple_model(
-            scope, model, inputs)
+        scope, model, inputs)
     this_operator = scope.declare_local_operator('LgbmZipMap')
     this_operator.inputs = probability_tensor
+    this_operator.zipmap = zipmap
+
     classes = model.classes_
     label_type = Int64Type()
 
@@ -118,34 +118,39 @@ def _parse_sklearn_classifier(scope, model, inputs):
         label_type = StringType()
 
     output_label = scope.declare_local_variable('label', label_type)
-    output_probability = scope.declare_local_variable(
-        'probabilities',
-        SequenceType(DictionaryType(label_type, FloatTensorType())))
+    if zipmap:
+        output_probability = scope.declare_local_variable(
+            'probabilities',
+            SequenceType(DictionaryType(label_type, FloatTensorType())))
+    else:
+        output_probability = scope.declare_local_variable(
+            'probabilities', FloatTensorType())
     this_operator.outputs.append(output_label)
     this_operator.outputs.append(output_probability)
     return this_operator.outputs
 
 
-def _parse_lightgbm(scope, model, inputs):
+def _parse_lightgbm(scope, model, inputs, zipmap=True):
     '''
     This is a delegate function. It doesn't nothing but invoke the correct parsing function according to the input
     model's type.
     :param scope: Scope object
     :param model: A lightgbm object
     :param inputs: A list of variables
+    :param zipmap: add operator ZipMap after operator TreeEnsembleClassifier
     :return: The output variables produced by the input model
     '''
     if isinstance(model, LGBMClassifier):
-        return _parse_sklearn_classifier(scope, model, inputs)
+        return _parse_sklearn_classifier(scope, model, inputs, zipmap=zipmap)
     if (isinstance(model, WrappedBooster) and
             model.operator_name == 'LgbmClassifier'):
-        return _parse_sklearn_classifier(scope, model, inputs)
+        return _parse_sklearn_classifier(scope, model, inputs, zipmap=zipmap)
     return _parse_lightgbm_simple_model(scope, model, inputs)
 
 
 def parse_lightgbm(model, initial_types=None, target_opset=None,
-                   custom_conversion_functions=None, custom_shape_calculators=None):
-
+                   custom_conversion_functions=None, custom_shape_calculators=None,
+                   zipmap=True):
     raw_model_container = LightGbmModelContainer(model)
     topology = Topology(raw_model_container, default_batch_size='None',
                         initial_types=initial_types, target_opset=target_opset,
@@ -160,9 +165,9 @@ def parse_lightgbm(model, initial_types=None, target_opset=None,
     for variable in inputs:
         raw_model_container.add_input(variable)
 
-    outputs = _parse_lightgbm(scope, model, inputs)
+    outputs = _parse_lightgbm(scope, model, inputs, zipmap=zipmap)
 
     for variable in outputs:
         raw_model_container.add_output(variable)
 
-    return topology
+    return topology

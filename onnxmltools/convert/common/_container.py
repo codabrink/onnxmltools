@@ -1,8 +1,4 @@
-# -------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See License.txt in the project root for
-# license information.
-# --------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
 
 from onnxconverter_common.container import (
     RawModelContainer,
@@ -17,8 +13,10 @@ class LightGbmModelContainer(CommonSklearnModelContainer):
 class XGBoostModelContainer(CommonSklearnModelContainer):
     pass
 
+
 class H2OModelContainer(CommonSklearnModelContainer):
     pass
+
 
 class SparkmlModelContainer(RawModelContainer):
 

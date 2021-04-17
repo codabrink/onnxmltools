@@ -1,8 +1,5 @@
-#-------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See License.txt in the project root for
-# license information.
-#--------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
+
 import numpy
 import pickle
 import os
@@ -92,7 +89,7 @@ def dump_data_and_model(data, model, onnx=None, basename="model", folder=None,
             else:
                 prediction = [model.predict(data)]
         elif isinstance(model, xgboost.Booster):
-            # XGBoost Booster            
+            # XGBoost Booster
             from ..convert.xgboost._parse import _get_attributes
             from xgboost import DMatrix
             datax = DMatrix(data)
@@ -100,8 +97,11 @@ def dump_data_and_model(data, model, onnx=None, basename="model", folder=None,
             if model_dict['objective'].startswith('binary'):
                 score = model.predict(datax)
                 prediction = [score > 0.5, numpy.vstack([1-score, score]).T]
-            elif model_dict['objective'].startswith('multi'):
+            elif model_dict['objective'].startswith('multi:softprob'):
                 score = model.predict(datax)
+                prediction = [score.argmax(axis=1), score]
+            elif model_dict['objective'].startswith('multi:softmax'):
+                score = model.predict(datax, output_margin=True)
                 prediction = [score.argmax(axis=1), score]
             else:
                 prediction = [model.predict(datax)]
@@ -191,7 +191,7 @@ def dump_data_and_model(data, model, onnx=None, basename="model", folder=None,
     return names
 
 
-def convert_model(model, name, input_types):
+def convert_model(model, name, input_types, without_onnx_ml=False, **kwargs):
     """
     Runs the appropriate conversion method.
 
@@ -201,23 +201,26 @@ def convert_model(model, name, input_types):
     from sklearn.base import BaseEstimator
     if model.__class__.__name__.startswith("LGBM"):
         from onnxmltools.convert import convert_lightgbm
-        model, prefix = convert_lightgbm(model, name, input_types), "LightGbm"
+        model, prefix = convert_lightgbm(model, name, input_types, without_onnx_ml=without_onnx_ml, **kwargs), "LightGbm"
     elif model.__class__.__name__.startswith("XGB"):
         from onnxmltools.convert import convert_xgboost
-        model, prefix = convert_xgboost(model, name, input_types), "XGB"
+        model, prefix = convert_xgboost(model, name, input_types, **kwargs), "XGB"
     elif model.__class__.__name__ == 'Booster':
         import lightgbm
         if isinstance(model, lightgbm.Booster):
             from onnxmltools.convert import convert_lightgbm
-            model, prefix = convert_lightgbm(model, name, input_types), "LightGbm"
+            model, prefix = convert_lightgbm(model, name, input_types, without_onnx_ml=without_onnx_ml, **kwargs), "LightGbm"
         else:
             raise RuntimeError("Unable to convert model of type '{0}'.".format(type(model)))
+    elif model.__class__.__name__.startswith("CatBoost"):
+        from onnxmltools.convert import convert_catboost
+        model, prefix = convert_catboost(model, name, input_types, **kwargs), "CatBoost"
     elif isinstance(model, BaseEstimator):
         from onnxmltools.convert import convert_sklearn
-        model, prefix = convert_sklearn(model, name, input_types), "Sklearn"
+        model, prefix = convert_sklearn(model, name, input_types, **kwargs), "Sklearn"
     else:
         from onnxmltools.convert import convert_coreml
-        model, prefix = convert_coreml(model, name, input_types), "Cml"
+        model, prefix = convert_coreml(model, name, input_types, **kwargs), "Cml"
     if model is None:
         raise RuntimeError("Unable to convert model of type '{0}'.".format(type(model)))
     return model, prefix

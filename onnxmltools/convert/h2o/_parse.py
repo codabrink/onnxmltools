@@ -1,11 +1,9 @@
-# -------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See License.txt in the project root for
-# license information.
-# --------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
+
 from onnxconverter_common.data_types import FloatTensorType
 from ..common._container import H2OModelContainer
 from ..common._topology import Topology
+
 
 def _parse_h2o(scope, model, inputs):
     '''
@@ -30,7 +28,6 @@ def _parse_h2o(scope, model, inputs):
 
 def parse_h2o(model, initial_types=None, target_opset=None,
               custom_conversion_functions=None, custom_shape_calculators=None):
-
     raw_model_container = H2OModelContainer(model)
     topology = Topology(raw_model_container, default_batch_size='None',
                         initial_types=initial_types, target_opset=target_opset,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Common function to converters and shape calculators.
 """
@@ -12,5 +14,9 @@ def get_xgb_params(xgb_node):
     else:
         # XGBoost < 0.7
         params = xgb_node.__dict__
-        
-    return params        
+
+    if ('n_estimators' not in params and
+            hasattr(xgb_node, 'n_estimators')):
+        # xgboost >= 1.0.2
+        params['n_estimators'] = xgb_node.n_estimators
+    return params

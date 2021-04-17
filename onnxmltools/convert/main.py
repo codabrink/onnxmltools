@@ -1,13 +1,8 @@
-# -------------------------------------------------------------------------
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License. See License.txt in the project root for
-# license information.
-# --------------------------------------------------------------------------
+# SPDX-License-Identifier: Apache-2.0
 
 import onnx
 from .common import utils
 import warnings
-import importlib
 
 
 def convert_coreml(model, name=None, initial_types=None, doc_string='', target_opset=None,
@@ -44,14 +39,27 @@ def convert_libsvm(model, name=None, initial_types=None, doc_string='', target_o
                    custom_conversion_functions, custom_shape_calculators)
 
 
+def convert_catboost(model, name=None, initial_types=None, doc_string='', target_opset=None):
+    try:
+        from catboost.utils import convert_to_onnx_object
+    except ImportError:
+        raise RuntimeError('CatBoost is not installed or needs to be updated. '
+                           'Please install/upgrade CatBoost to use this feature.')
+
+    return convert_to_onnx_object(model, export_parameters={'onnx_doc_string': doc_string, 'onnx_graph_name': name},
+                                  initial_types=initial_types, target_opset=target_opset)
+
+
 def convert_lightgbm(model, name=None, initial_types=None, doc_string='', target_opset=None,
-                     targeted_onnx=onnx.__version__, custom_conversion_functions=None, custom_shape_calculators=None):
+                     targeted_onnx=onnx.__version__, custom_conversion_functions=None,
+                     custom_shape_calculators=None, without_onnx_ml=False, zipmap=True):
     if not utils.lightgbm_installed():
         raise RuntimeError('lightgbm is not installed. Please install lightgbm to use this feature.')
 
     from .lightgbm.convert import convert
     return convert(model, name, initial_types, doc_string, target_opset, targeted_onnx,
-                   custom_conversion_functions, custom_shape_calculators)
+                   custom_conversion_functions, custom_shape_calculators, without_onnx_ml,
+                   zipmap=zipmap)
 
 
 def convert_sklearn(model, name=None, initial_types=None, doc_string='', target_opset=None,
@@ -166,9 +174,8 @@ def convert_tensorflow(frozen_graph_def,
                        target_opset=None,
                        channel_first_inputs=None,
                        debug_mode=False, custom_op_conversions=None):
-    try:
-        importlib.import_module('tf2onnx')
-    except (ImportError, ModuleNotFoundError) as e:
+    import pkgutil
+    if not pkgutil.find_loader('tf2onnx'):
         raise RuntimeError('tf2onnx is not installed, please install it before calling this function.')
 
     return _convert_tf_wrapper(frozen_graph_def, name, input_names, output_names, doc_string,
